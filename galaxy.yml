@@ -1,4 +1,4 @@
-namespace: "cherubits"
+namespace: "lordoftheflies"
 name: "ansible_collection_freeipa"
 version: "0.0.1"
 description: "Collection of roles which needed for internal-policy-audit."
