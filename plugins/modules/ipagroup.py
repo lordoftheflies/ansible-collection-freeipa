@@ -70,7 +70,9 @@ options:
     required: false
     type: list
   service:
-    description: List of service names assigned to this group.
+    description:
+    - List of service names assigned to this group.
+    - Only usable with IPA versions 4.7 and up.
     required: false
     type: list
   action:
@@ -137,18 +139,18 @@ RETURN = """
 """
 
 from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils._text import to_text
 from ansible.module_utils.ansible_freeipa_module import temp_kinit, \
-    temp_kdestroy, valid_creds, api_connect, api_command, compare_args_ipa
+    temp_kdestroy, valid_creds, api_connect, api_command, compare_args_ipa, \
+    api_check_param, module_params_get
 
 
 def find_group(module, name):
     _args = {
         "all": True,
-        "cn": to_text(name),
+        "cn": name,
     }
 
-    _result = api_command(module, "group_find", to_text(name), _args)
+    _result = api_command(module, "group_find", name, _args)
 
     if len(_result["result"]) > 1:
         module.fail_json(
@@ -164,7 +166,7 @@ def gen_args(description, gid, nonposix, external, nomembers):
     if description is not None:
         _args["description"] = description
     if gid is not None:
-        _args["gidnumber"] = str(gid)
+        _args["gidnumber"] = gid
     if nonposix is not None:
         _args["nonposix"] = nonposix
     if external is not None:
@@ -209,8 +211,7 @@ def main():
                         choices=["member", "group"]),
             # state
             state=dict(type="str", default="present",
-                       choices=["present", "absent",
-                                "member_present", "member_absent"]),
+                       choices=["present", "absent"]),
         ),
         supports_check_mode=True,
     )
@@ -220,22 +221,22 @@ def main():
     # Get parameters
 
     # general
-    ipaadmin_principal = ansible_module.params.get("ipaadmin_principal")
-    ipaadmin_password = ansible_module.params.get("ipaadmin_password")
-    names = ansible_module.params.get("name")
+    ipaadmin_principal = module_params_get(ansible_module, "ipaadmin_principal")
+    ipaadmin_password = module_params_get(ansible_module, "ipaadmin_password")
+    names = module_params_get(ansible_module, "name")
 
     # present
-    description = ansible_module.params.get("description")
-    gid = ansible_module.params.get("gid")
-    nonposix = ansible_module.params.get("nonposix")
-    external = ansible_module.params.get("external")
-    nomembers = ansible_module.params.get("nomembers")
-    user = ansible_module.params.get("user")
-    group = ansible_module.params.get("group")
-    service = ansible_module.params.get("service")
-    action = ansible_module.params.get("action")
+    description = module_params_get(ansible_module, "description")
+    gid = module_params_get(ansible_module, "gid")
+    nonposix = module_params_get(ansible_module, "nonposix")
+    external = module_params_get(ansible_module, "external")
+    nomembers = module_params_get(ansible_module, "nomembers")
+    user = module_params_get(ansible_module, "user")
+    group = module_params_get(ansible_module, "group")
+    service = module_params_get(ansible_module, "service")
+    action = module_params_get(ansible_module, "action")
     # state
-    state = ansible_module.params.get("state")
+    state = module_params_get(ansible_module, "state")
 
     # Check parameters
 
@@ -276,6 +277,12 @@ def main():
             ccache_dir, ccache_name = temp_kinit(ipaadmin_principal,
                                                  ipaadmin_password)
         api_connect()
+
+        has_add_member_service = api_check_param("group_add_member", "service")
+        if service is not None and not has_add_member_service:
+            ansible_module.fail_json(
+                msg="Managing a service as part of a group is not supported "
+                "by your IPA version")
 
         commands = []
 
@@ -326,46 +333,55 @@ def main():
                             set(res_find.get("member_service", [])) -
                             set(service or []))
 
-                        # Add members
-                        if len(user_add) > 0 or len(group_add) > 0 or \
-                           len(service_add) > 0:
-                            commands.append([name, "group_add_member",
-                                             {
-                                                 "user": user_add,
-                                                 "group": group_add,
-                                                 "service": service_add,
-                                             }])
-                        # Remove members
-                        if len(user_del) > 0 or len(group_del) > 0 or \
-                           len(service_del) > 0:
-                            commands.append([name, "group_remove_member",
-                                             {
-                                                 "user": user_del,
-                                                 "group": group_del,
-                                                 "service": service_del,
-                                             }])
+                        if has_add_member_service:
+                            # Add members
+                            if len(user_add) > 0 or len(group_add) > 0 or \
+                               len(service_add) > 0:
+                                commands.append([name, "group_add_member",
+                                                 {
+                                                     "user": user_add,
+                                                     "group": group_add,
+                                                     "service": service_add,
+                                                 }])
+                            # Remove members
+                            if len(user_del) > 0 or len(group_del) > 0 or \
+                               len(service_del) > 0:
+                                commands.append([name, "group_remove_member",
+                                                 {
+                                                     "user": user_del,
+                                                     "group": group_del,
+                                                     "service": service_del,
+                                                 }])
+                        else:
+                            # Add members
+                            if len(user_add) > 0 or len(group_add) > 0:
+                                commands.append([name, "group_add_member",
+                                                 {
+                                                     "user": user_add,
+                                                     "group": group_add,
+                                                 }])
+                            # Remove members
+                            if len(user_del) > 0 or len(group_del) > 0:
+                                commands.append([name, "group_remove_member",
+                                                 {
+                                                     "user": user_del,
+                                                     "group": group_del,
+                                                 }])
                 elif action == "member":
                     if res_find is None:
                         ansible_module.fail_json(msg="No group '%s'" % name)
-
-                    user_add = list(
-                        set(user or []) -
-                        set(res_find.get("member_user", [])))
-                    group_add = list(
-                        set(group or []) -
-                        set(res_find.get("member_group", [])))
-                    service_add = list(
-                        set(service or []) -
-                        set(res_find.get("member_service", [])))
-
-                    # Add members
-                    if len(user_add) > 0 or len(group_add) > 0 or \
-                       len(service_add) > 0:
+                    if has_add_member_service:
                         commands.append([name, "group_add_member",
                                          {
                                              "user": user,
                                              "group": group,
                                              "service": service,
+                                         }])
+                    else:
+                        commands.append([name, "group_add_member",
+                                         {
+                                             "user": user,
+                                             "group": group,
                                          }])
 
             elif state == "absent":
@@ -377,26 +393,12 @@ def main():
                     if res_find is None:
                         ansible_module.fail_json(msg="No group '%s'" % name)
 
-                    # Remove intersection member
-                    user_del = list(
-                        set(user or []) &
-                        set(res_find.get("member_user", [])))
-                    group_del = list(
-                        set(group or []) &
-                        set(res_find.get("member_group", [])))
-                    service_del = list(
-                        set(service or []) &
-                        set(res_find.get("member_service", [])))
-
-                    # Remove members
-                    if len(user_del) > 0 or len(group_del) > 0 or \
-                       len(service_del) > 0:
-                        commands.append([name, "group_remove_member",
-                                         {
-                                             "user": user,
-                                             "group": group,
-                                             "service": service,
-                                         }])
+                    commands.append([name, "group_remove_member",
+                                     {
+                                         "user": user,
+                                         "group": group,
+                                         "service": service,
+                                     }])
             else:
                 ansible_module.fail_json(msg="Unkown state '%s'" % state)
 
@@ -404,11 +406,32 @@ def main():
 
         for name, command, args in commands:
             try:
-                api_command(ansible_module, command, to_text(name), args)
-                changed = True
+                result = api_command(ansible_module, command, name,
+                                     args)
+                if "completed" in result:
+                    if result["completed"] > 0:
+                        changed = True
+                else:
+                    changed = True
             except Exception as e:
                 ansible_module.fail_json(msg="%s: %s: %s" % (command, name,
                                                              str(e)))
+            # Get all errors
+            # All "already a member" and "not a member" failures in the
+            # result are ignored. All others are reported.
+            errors = []
+            if "failed" in result and len(result["failed"]) > 0:
+                for item in result["failed"]:
+                    failed_item = result["failed"][item]
+                    for member_type in failed_item:
+                        for member, failure in failed_item[member_type]:
+                            if "already a member" in failure \
+                               or "not a member" in failure:
+                                continue
+                            errors.append("%s: %s %s: %s" % (
+                                command, member_type, member, failure))
+            if len(errors) > 0:
+                ansible_module.fail_json(msg=", ".join(errors))
 
     except Exception as e:
         ansible_module.fail_json(msg=str(e))

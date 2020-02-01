@@ -1,7 +1,7 @@
 FreeIPA Ansible collection
 ==========================
 
-This repository contains [Ansible](https://www.ansible.com/) roles and playbooks to install and uninstall [FreeIPA](https://www.freeipa.org/) `servers`, `replicas` and `clients`. Also modules for group, topology and user management.
+This repository contains [Ansible](https://www.ansible.com/) roles and playbooks to install and uninstall [FreeIPA](https://www.freeipa.org/) `servers`, `replicas` and `clients`. Also modules for group, host, topology and user management.
 
 **Note**: The ansible playbooks and roles require a configured ansible environment where the ansible nodes are reachable and are properly set up to have an IP address and a working package manager.
 
@@ -12,8 +12,18 @@ Features
 * One-time-password (OTP) support for client installation
 * Repair mode for clients
 * Modules for group management
+* Modules for hbacrule management
+* Modules for hbacsvc management
+* Modules for hbacsvcgroup management
+* Modules for host management
+* Modules for hostgroup management
+* Modules for pwpolicy management
+* Modules for sudocmd management
+* Modules for sudocmdgroup management
+* Modules for sudorule management
 * Modules for topology management
 * Modules for user management
+* Modules for vault management
 
 Supported FreeIPA Versions
 --------------------------
@@ -60,13 +70,13 @@ How to use ansible-freeipa
 
 **GIT repo**
 
-The simplest method for now is to clone this repository on the contoller from github directly and to start the deployment from the ansible-freeipa directory:
+The simplest method for now is to clone this repository on the controller from github directly and to start the deployment from the ansible-freeipa directory:
 
 ```bash
 git clone https://github.com/freeipa/ansible-freeipa.git
 cd ansible-freeipa
 ```
-You can use the roles directly within the top directory of the git repo, but to be able to use the management modules in the plugins subdirectory, you have to either adapt `anisble.cfg` or create links for the roles, modules or directories.
+You can use the roles directly within the top directory of the git repo, but to be able to use the management modules in the plugins subdirectory, you have to either adapt `ansible.cfg` or create links for the roles, modules or directories.
 
 You can either adapt ansible.cfg:
 
@@ -86,11 +96,19 @@ ansible-freeipa/plugins/module_utils to ~/.ansible/plugins/
 
 **RPM package**
 
-There are RPM packages available for Fedora 29+. These are installing the roles and modules into the global Ansible directories for `roles`, `plugins/modules` and `plugings/module_utils` in the `/usr/share/ansible` directory. Therefore is it possible to use the roles and modules without adapting the names like it is done in the example playbooks.
+There are RPM packages available for Fedora 29+. These are installing the roles and modules into the global Ansible directories for `roles`, `plugins/modules` and `plugins/module_utils` in the `/usr/share/ansible` directory. Therefore is it possible to use the roles and modules without adapting the names like it is done in the example playbooks.
 
 **Ansible galaxy**
 
 This command will get the whole collection from galaxy:
+
+```bash
+ansible-galaxy collection install freeipa.ansible_freeipa
+```
+
+Installing collections using the ansible-galaxy command is only supported with ansible 2.9+.
+
+The mazer tool can be used for to install the collection for ansible 2.8:
 
 ```bash
 mazer install freeipa.ansible_freeipa
@@ -138,6 +156,7 @@ ipaserver_install_packages=no
 ipaserver_setup_firewalld=no
 ```
 The installation of packages and also the configuration of the firewall are by default enabled.
+Note that it is not enough to mask systemd firewalld service to skip the firewalld configuration. You need to set the variable to `no`.
 
 For more server settings, please have a look at the [server role documentation](roles/ipaserver/README.md).
 
@@ -213,6 +232,7 @@ ipareplica_setup_firewalld=no
 ```
 
 The installation of packages and also the configuration of the firewall are by default enabled.
+Note that it is not enough to mask systemd firewalld service to skip the firewalld configuration. You need to set the variable to `no`.
 
 For more replica settings, please have a look at the [replica role documentation](roles/ipareplica/README.md).
 
@@ -346,7 +366,7 @@ If Ansible vault is used for passwords, then it is needed to adapt the playbooks
     state: present
 ```
 
-It is also needed to provide the vault passowrd file on the ansible-playbook command line:
+It is also needed to provide the vault password file on the ansible-playbook command line:
 ```bash
 ansible-playbook -v -i inventory/hosts --vault-password-file .vaul_pass.txt install-server.yml
 ```
@@ -387,6 +407,16 @@ Modules in plugin/modules
 =========================
 
 * [ipagroup](README-group.md)
+* [ipahbacrule](README-hbacrule.md)
+* [ipahbacsvc](README-hbacsvc.md)
+* [ipahbacsvcgroup](README-hbacsvc.md)
+* [ipahost](README-host.md)
+* [ipahostgroup](README-hostgroup.md)
+* [ipapwpolicy](README-pwpolicy.md)
+* [ipasudocmd](README-sudocmd.md)
+* [ipasudocmdgroup](README-sudocmdgroup.md)
+* [ipasudorule](README-sudorule.md)
 * [ipatopologysegment](README-topology.md)
 * [ipatopologysuffix](README-topology.md)
 * [ipauser](README-user.md)
+* [ipavault](README-vault.md)

@@ -4,9 +4,9 @@ Group module
 Description
 -----------
 
-The group module allows to add, remove, enable, disable, unlock und undelete groups.
+The group module allows to ensure presence and absence of groups and members of groups.
 
-The group module is as compatible as possible to the Ansible upstream `ipa_group` module, but addtionally offers to add users to a group and also to remove users from a group.
+The group module is as compatible as possible to the Ansible upstream `ipa_group` module, but additionally offers to add users to a group and also to remove users from a group.
 
 
 Features
@@ -142,9 +142,9 @@ Variable | Description | Required
 `nomembers` | Suppress processing of membership attributes. (bool) | no
 `user` | List of user name strings assigned to this group. | no
 `group` | List of group name strings assigned to this group. | no
-`service` | List of service name strings assigned to this group | no
+`service` | List of service name strings assigned to this group. Only usable with IPA versions 4.7 and up. | no
 `action` | Work on group or member level. It can be on of `member` or `group` and defaults to `group`. | no
-`state` | The state to ensure. It can be one of `present` or `absent`, defauilt: `present`. | yes
+`state` | The state to ensure. It can be one of `present` or `absent`, default: `present`. | yes
 
 
 Authors
