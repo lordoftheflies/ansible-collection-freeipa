@@ -1,15 +1,16 @@
-namespace: "freeipa"
-name: "ansible_freeipa"
-version: "A.B.C"
-description: ""
+namespace: "cherubits"
+name: "ansible_collection_freeipa"
+version: "0.0.1"
+description: "Collection of roles which needed for internal-policy-audit."
 
 authors:
   - "Thomas Woerner <twoerner@redhat.com>"
+  - "László Hegedűs <laszlo.hegedus@cherubits.hu>"
 
-repository: "https://github.com/freeipa/ansible-freeipa"
-documentation: "https://github.com/freeipa/ansible-freeipa/blob/master/README.md"
-homepage: "https://github.com/freeipa/ansible-freeipa"
-issues: "https://github.com/freeipa/ansible-freeipa/issues"
+repository: "https://github.com/lordoftheflies/ansible-collection-freeipa"
+documentation: "https://github.com/lordoftheflies/ansible-collection-freeipa/blob/master/README.md"
+homepage: "https://github.com/lordoftheflies/ansible-collection-freeipa"
+issues: "https://github.com/lordoftheflies/ansible-collection-freeipa/issues"
 
 dependencies: {}
 
@@ -18,6 +19,7 @@ license: "GPL-3.0-or-later"
 license_file: "COPYING"
 
 tags:
+  - "cherubits"
   - "identity"
   - "ipa"
   - "freeipa"
