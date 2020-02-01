@@ -12,11 +12,11 @@ documentation: "https://github.com/lordoftheflies/ansible-collection-freeipa/blo
 homepage: "https://github.com/lordoftheflies/ansible-collection-freeipa"
 issues: "https://github.com/lordoftheflies/ansible-collection-freeipa/issues"
 
-dependencies: {}
-
 readme: "README.md"
 license: "GPL-3.0-or-later"
 license_file: "COPYING"
+
+dependencies:
 
 tags:
   - "cherubits"

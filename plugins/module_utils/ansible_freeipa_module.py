@@ -37,6 +37,17 @@ except ImportError:
 from ipapython.ipautil import run
 from ipaplatform.paths import paths
 from ipalib.krb_utils import get_credentials_if_valid
+from ansible.module_utils._text import to_text
+try:
+    from ipalib.x509 import Encoding
+except ImportError:
+    from cryptography.hazmat.primitives.serialization import Encoding
+import base64
+import six
+
+
+if six.PY3:
+    unicode = str
 
 
 def valid_creds(module, principal):
@@ -44,10 +55,12 @@ def valid_creds(module, principal):
     Get valid credintials matching the princial, try GSSAPI first
     """
     if "KRB5CCNAME" in os.environ:
-        module.debug('KRB5CCNAME set to %s' %
-                     os.environ.get('KRB5CCNAME', None))
+        ccache = os.environ["KRB5CCNAME"]
+        module.debug('KRB5CCNAME set to %s' % ccache)
+
         try:
-            cred = gssapi.creds.Credentials()
+            cred = gssapi.Credentials(usage='initiate',
+                                      store={'ccache': ccache})
         except gssapi.raw.misc.GSSError as e:
             module.fail_json(msg='Failed to find default ccache: %s' % e)
         else:
@@ -107,7 +120,7 @@ def temp_kdestroy(ccache_dir, ccache_name):
         shutil.rmtree(ccache_dir, ignore_errors=True)
 
 
-def api_connect():
+def api_connect(context=None):
     """
     Create environment, initialize api and connect to ldap2
     """
@@ -115,19 +128,41 @@ def api_connect():
     env._bootstrap()
     env._finalize_core(**dict(DEFAULT_CONFIG))
 
-    api.bootstrap(context='server', debug=env.debug, log=None)
+    # available contexts are 'server', 'ansible-freeipa' and 'cli_installer'
+    if context is None:
+        context = 'server'
+
+    api.bootstrap(context=context, debug=env.debug, log=None)
     api.finalize()
-    api.Backend.ldap2.connect()
+
+    if api.env.in_server:
+        backend = api.Backend.ldap2
+    else:
+        backend = api.Backend.rpcclient
+
+    if not backend.isconnected():
+        backend.connect()
 
 
 def api_command(module, command, name, args):
     """
-    Call ipa.Command, use AnsibleModule.fail_json for error handling
+    Call ipa.Command
     """
-    try:
-        return api.Command[command](name, **args)
-    except Exception as e:
-        module.fail_json(msg="%s: %s" % (command, e))
+    return api.Command[command](name, **args)
+
+
+def api_command_no_name(module, command, args):
+    """
+    Call ipa.Command without a name.
+    """
+    return api.Command[command](**args)
+
+
+def api_check_param(command, name):
+    """
+    Return if param exists in command param list
+    """
+    return name in api.Command[command].params
 
 
 def execute_api_command(module, principal, password, command, name, args):
@@ -178,10 +213,65 @@ def compare_args_ipa(module, args, ipa):
             # If ipa_arg is a list and arg is not, replace arg
             # with list containing arg. Most args in a find result
             # are lists, but not all.
-            if isinstance(ipa_arg, list) and not isinstance(arg, list):
-                arg = [arg]
+            if isinstance(ipa_arg, tuple):
+                ipa_arg = list(ipa_arg)
+            if isinstance(ipa_arg, list):
+                if not isinstance(arg, list):
+                    arg = [arg]
+                if isinstance(ipa_arg[0], str) and isinstance(arg[0], int):
+                    arg = [to_text(_arg) for _arg in arg]
+                if isinstance(ipa_arg[0], unicode) and isinstance(arg[0], int):
+                    arg = [to_text(_arg) for _arg in arg]
             # module.warn("%s <=> %s" % (arg, ipa_arg))
-            if arg != ipa_arg:
+            if set(arg) != set(ipa_arg):
+                # module.warn("DIFFERENT")
                 return False
 
     return True
+
+
+def _afm_convert(value):
+    if value is not None:
+        if isinstance(value, list):
+            return [_afm_convert(x) for x in value]
+        elif isinstance(value, dict):
+            return {_afm_convert(k): _afm_convert(v) for k, v in value.items()}
+        elif isinstance(value, str):
+            return to_text(value)
+        else:
+            return value
+    else:
+        return value
+
+
+def module_params_get(module, name):
+    return _afm_convert(module.params.get(name))
+
+
+def api_get_realm():
+    return api.env.realm
+
+
+def gen_add_del_lists(user_list, res_list):
+    """
+    Generate the lists for the addition and removal of members using the
+    provided user and ipa settings
+    """
+    add_list = list(set(user_list or []) - set(res_list or []))
+    del_list = list(set(res_list or []) - set(user_list or []))
+
+    return add_list, del_list
+
+
+def encode_certificate(cert):
+    """
+    Encode a certificate using base64 with also taking FreeIPA and Python
+    versions into account
+    """
+    if isinstance(cert, str) or isinstance(cert, unicode):
+        encoded = base64.b64encode(cert)
+    else:
+        encoded = base64.b64encode(cert.public_bytes(Encoding.DER))
+    if not six.PY2:
+        encoded = encoded.decode('ascii')
+    return encoded
