@@ -1,27 +1,26 @@
-namespace: "lordoftheflies"
-name: "ansible_collection_freeipa"
-version: "0.0.1"
-description: "Collection of roles which needed for internal-policy-audit."
-
+namespace: lordoftheflies
+name: freeipa_collection
+version: 0.0.2
+description: Collection of roles which needed for internal-policy-audit.
 authors:
-  - "Thomas Woerner <twoerner@redhat.com>"
-  - "László Hegedűs <laszlo.hegedus@cherubits.hu>"
+  - Thomas Woerner <twoerner@redhat.com>
+  - László Hegedűs <laszlo.hegedus@cherubits.hu>
 
-repository: "https://github.com/lordoftheflies/ansible-collection-freeipa"
-documentation: "https://github.com/lordoftheflies/ansible-collection-freeipa/blob/master/README.md"
-homepage: "https://github.com/lordoftheflies/ansible-collection-freeipa"
-issues: "https://github.com/lordoftheflies/ansible-collection-freeipa/issues"
+repository: https://github.com/lordoftheflies/freeipa_collection
+documentation: https://github.com/lordoftheflies/freeipa_collection/blob/master/README.md
+homepage: https://github.com/lordoftheflies/freeipa_collection
+issues: https://github.com/lordoftheflies/freeipa_collection/issues
 
-readme: "README.md"
-license: "GPL-3.0-or-later"
-license_file: "COPYING"
+readme: README.md
+license: GPL-3.0-or-later
+license_file: COPYING
 
 dependencies:
 
 tags:
-  - "cherubits"
-  - "identity"
-  - "ipa"
-  - "freeipa"
-  - "cluster"
-  - "collection"
+  - cherubits
+  - identity
+  - ipa
+  - freeipa
+  - cluster
+  - collection
