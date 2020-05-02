@@ -78,7 +78,7 @@ import inspect
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.ansible_ipa_replica import (
-    AnsibleModuleLog, installer, DN, paths, sysrestore,
+    AnsibleModuleLog, setup_logging, installer, DN, paths, sysrestore,
     gen_env_boostrap_finalize_core, constants, api_bootstrap_finalize,
     gen_ReplicaConfig, api, redirect_stdout, install_krb
 )
@@ -103,6 +103,7 @@ def main():
     )
 
     ansible_module._ansible_debug = True
+    setup_logging()
     ansible_log = AnsibleModuleLog(ansible_module)
 
     # get parameters #
@@ -154,19 +155,19 @@ def main():
     with redirect_stdout(ansible_log):
         argspec = inspect.getargspec(install_krb)
         if "promote" in argspec.args:
-            krb = install_krb(
+            install_krb(
                 config,
                 setup_pkinit=not options.no_pkinit,
                 pkcs12_info=pkinit_pkcs12_info,
                 promote=promote)
         else:
             if "fstore" not in argspec.args:
-                krb = install_krb(
+                install_krb(
                     config,
                     setup_pkinit=not options.no_pkinit,
                     pkcs12_info=pkinit_pkcs12_info)
             else:
-                krb = install_krb(
+                install_krb(
                     config,
                     setup_pkinit=not options.no_pkinit,
                     pkcs12_info=pkinit_pkcs12_info,

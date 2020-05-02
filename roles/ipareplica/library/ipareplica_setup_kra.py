@@ -96,9 +96,6 @@ options:
   config_master_host_name:
     description: The config master_host_name setting
     required: no
-  ccache:
-    description: The local ccache
-    required: no
   installer_ccache:
     description: The installer ccache setting
     required: no
@@ -137,7 +134,7 @@ import os
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.ansible_ipa_replica import (
-    AnsibleModuleLog, installer, DN, paths,
+    AnsibleModuleLog, setup_logging, installer, DN, paths,
     ansible_module_get_parsed_ip_addresses,
     gen_env_boostrap_finalize_core, constants, api_bootstrap_finalize,
     gen_ReplicaConfig, gen_remote_api, api, redirect_stdout, custodiainstance,
@@ -172,7 +169,6 @@ def main():
             # additional
             server=dict(required=True),
             config_master_host_name=dict(required=True),
-            ccache=dict(required=True),
             installer_ccache=dict(required=True),
             _ca_enabled=dict(required=False, type='bool'),
             _kra_enabled=dict(required=False, type='bool'),
@@ -186,6 +182,7 @@ def main():
     )
 
     ansible_module._ansible_debug = True
+    setup_logging()
     ansible_log = AnsibleModuleLog(ansible_module)
 
     # get parameters #
@@ -231,8 +228,6 @@ def main():
     # additional
     options.server = ansible_module.params.get('server')
     master_host_name = ansible_module.params.get('config_master_host_name')
-    ccache = ansible_module.params.get('ccache')
-    # os.environ['KRB5CCNAME'] = ccache
     os.environ['KRB5CCNAME'] = ansible_module.params.get('installer_ccache')
     installer._ccache = ansible_module.params.get('installer_ccache')
     ca_enabled = ansible_module.params.get('_ca_enabled')
@@ -266,8 +261,6 @@ def main():
 
     remote_api = gen_remote_api(master_host_name, paths.ETC_IPA)
     installer._remote_api = remote_api
-
-    # ccache = os.environ['KRB5CCNAME']
 
     with redirect_stdout(ansible_log):
         ansible_log.debug("-- INSTALL KRA --")

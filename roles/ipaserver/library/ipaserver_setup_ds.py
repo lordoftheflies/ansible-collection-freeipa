@@ -55,7 +55,7 @@ options:
     description: The starting value for the IDs range (default random)
     required: no
   idmax:
-    description: The max value for the IDs range (default: idstart+199999)
+    description: The max value for the IDs range (default idstart+199999)
     required: no
   no_hbac_allow:
     description: Don't install allow_all HBAC rule
@@ -103,7 +103,7 @@ RETURN = '''
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.ansible_ipa_server import (
-    AnsibleModuleLog, options, sysrestore, paths,
+    AnsibleModuleLog, setup_logging, options, sysrestore, paths,
     api_Backend_ldap2, redirect_stdout, api, NUM_VERSION, tasks,
     dsinstance, ntpinstance, IPAAPI_USER
 )
@@ -138,6 +138,7 @@ def main():
     )
 
     ansible_module._ansible_debug = True
+    setup_logging()
     ansible_log = AnsibleModuleLog(ansible_module)
 
     # set values ############################################################

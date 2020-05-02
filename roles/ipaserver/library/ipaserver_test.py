@@ -79,7 +79,7 @@ options:
     description: The starting value for the IDs range (default random)
     required: yes
   idmax:
-    description: The max value for the IDs range (default: idstart+199999)
+    description: The max value for the IDs range (default idstart+199999)
     required: yes
   no_pkinit:
     description: Disable pkinit setup steps
@@ -211,9 +211,10 @@ import inspect
 import random
 
 from ansible.module_utils.basic import AnsibleModule
+from ansible.module_utils._text import to_native
 from ansible.module_utils.ansible_ipa_server import (
-    AnsibleModuleLog, options, adtrust_imported, kra_imported, PKIIniLoader,
-    MIN_DOMAIN_LEVEL, MAX_DOMAIN_LEVEL, check_zone_overlap,
+    AnsibleModuleLog, setup_logging, options, adtrust_imported, kra_imported,
+    PKIIniLoader, MIN_DOMAIN_LEVEL, MAX_DOMAIN_LEVEL, check_zone_overlap,
     redirect_stdout, validate_dm_password, validate_admin_password,
     NUM_VERSION, is_ipa_configured, sysrestore, paths, bindinstance,
     read_cache, ca, tasks, check_ldap_conf, timeconf, httpinstance,
@@ -302,6 +303,7 @@ def main():
     )
 
     ansible_module._ansible_debug = True
+    setup_logging()
     ansible_log = AnsibleModuleLog(ansible_module)
 
     # set values ############################################################
@@ -583,7 +585,7 @@ def main():
                         "--auto-forwarders, or --no-forwarders options")
 
     except RuntimeError as e:
-        ansible_module.fail_json(msg=e)
+        ansible_module.fail_json(msg=to_native(e))
 
     # #######################################################################
 

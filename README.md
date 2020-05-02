@@ -11,6 +11,8 @@ Features
 * Cluster deployments: Server, replicas and clients in one playbook
 * One-time-password (OTP) support for client installation
 * Repair mode for clients
+* Modules for dns forwarder management
+* Modules for dns zone management
 * Modules for group management
 * Modules for hbacrule management
 * Modules for hbacsvc management
@@ -18,6 +20,7 @@ Features
 * Modules for host management
 * Modules for hostgroup management
 * Modules for pwpolicy management
+* Modules for service management
 * Modules for sudocmd management
 * Modules for sudocmdgroup management
 * Modules for sudorule management
@@ -28,7 +31,7 @@ Features
 Supported FreeIPA Versions
 --------------------------
 
-FreeIPA versions 4.6 and up are supported by all roles. 
+FreeIPA versions 4.6 and up are supported by all roles.
 
 The client role supports versions 4.4 and up, the server role is working with versions 4.5 and up, the replica role is currently only working with versions 4.6 and up.
 
@@ -406,6 +409,9 @@ Roles
 Modules in plugin/modules
 =========================
 
+* [ipadnsconfig](README-dnsconfig.md)
+* [ipadnsforwardzone](README-dnsforwardzone.md)
+* [ipadnszone](README-dnszone.md)
 * [ipagroup](README-group.md)
 * [ipahbacrule](README-hbacrule.md)
 * [ipahbacsvc](README-hbacsvc.md)
@@ -413,6 +419,7 @@ Modules in plugin/modules
 * [ipahost](README-host.md)
 * [ipahostgroup](README-hostgroup.md)
 * [ipapwpolicy](README-pwpolicy.md)
+* [ipaservice](README-service.md)
 * [ipasudocmd](README-sudocmd.md)
 * [ipasudocmdgroup](README-sudocmdgroup.md)
 * [ipasudorule](README-sudorule.md)
@@ -420,3 +427,5 @@ Modules in plugin/modules
 * [ipatopologysuffix](README-topology.md)
 * [ipauser](README-user.md)
 * [ipavault](README-vault.md)
+
+If you want to write a new module please read [writing a new module](plugins/modules/README.md).
