@@ -1,6 +1,6 @@
 namespace: lordoftheflies
 name: freeipa_collection
-version: 0.0.2
+version: 1.0.2
 description: Collection of roles which needed for internal-policy-audit.
 authors:
   - Thomas Woerner <twoerner@redhat.com>
