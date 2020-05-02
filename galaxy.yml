@@ -1,6 +1,6 @@
 namespace: lordoftheflies
-name: freeipa_collection
-version: 1.0.2
+name: ansible_collection_freeipa
+version: 1.0.3
 description: Collection of roles which needed for internal-policy-audit.
 authors:
   - Thomas Woerner <twoerner@redhat.com>
@@ -15,7 +15,7 @@ readme: README.md
 license: GPL-3.0-or-later
 license_file: COPYING
 
-dependencies:
+dependencies: []
 
 tags:
   - cherubits
