@@ -118,7 +118,7 @@ def main():
             _ca_file=dict(required=False),
             _kra_enabled=dict(required=False, type='bool'),
             _kra_host_name=dict(required=False),
-            _pkinit_pkcs12_info=dict(required=False),
+            _pkinit_pkcs12_info=dict(required=False, type='list'),
             _top_dir=dict(required=True),
             dirman_password=dict(required=True, no_log=True),
         ),
@@ -169,6 +169,7 @@ def main():
     config.promote = installer.promote
     config.kra_enabled = kra_enabled
     config.kra_host_name = kra_host_name
+    config.setup_ca = options.setup_ca
 
     remote_api = gen_remote_api(master_host_name, paths.ETC_IPA)
 

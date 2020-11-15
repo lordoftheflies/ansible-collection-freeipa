@@ -1,3 +1,10 @@
 *.pyc
 *.retry
+
+# ignore virtual environments
+/.tox/
+/.venv/
+
+tests/logs/
+
 .idea/

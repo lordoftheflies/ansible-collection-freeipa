@@ -95,7 +95,7 @@ ipareplica1.example.com
 ipareplica2.example.com
 
 [ipareplicas:vars]
-ipaclient_domain=example.com
+ipareplica_domain=example.com
 ipaadmin_principal=admin
 ipaadmin_password=MySecretPassword123
 ipadm_password=MySecretPassword456
@@ -250,7 +250,7 @@ Variable | Description | Required
 -------- | ----------- | --------
 `ipareplica_install_packages` | The bool value defines if the needed packages are installed on the node. (bool, default: true) | no
 `ipareplica_setup_firewalld` | The value defines if the needed services will automatically be openen in the firewall managed by firewalld. (bool, default: true) | no
-
+`ipareplica_firewalld_zone` | The value defines the firewall zone that will be used. This needs to be an existing runtime and permanent zone. (string) | no
 
 Authors
 =======

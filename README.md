@@ -12,6 +12,7 @@ Features
 * One-time-password (OTP) support for client installation
 * Repair mode for clients
 * Modules for dns forwarder management
+* Modules for dns record management
 * Modules for dns zone management
 * Modules for group management
 * Modules for hbacrule management
@@ -20,11 +21,13 @@ Features
 * Modules for host management
 * Modules for hostgroup management
 * Modules for pwpolicy management
+* Modules for role management
 * Modules for service management
 * Modules for sudocmd management
 * Modules for sudocmdgroup management
 * Modules for sudorule management
 * Modules for topology management
+* Modules fot trust management
 * Modules for user management
 * Modules for vault management
 
@@ -411,6 +414,7 @@ Modules in plugin/modules
 
 * [ipadnsconfig](README-dnsconfig.md)
 * [ipadnsforwardzone](README-dnsforwardzone.md)
+* [ipadnsrecord](README-dnsrecord.md)
 * [ipadnszone](README-dnszone.md)
 * [ipagroup](README-group.md)
 * [ipahbacrule](README-hbacrule.md)
@@ -419,12 +423,14 @@ Modules in plugin/modules
 * [ipahost](README-host.md)
 * [ipahostgroup](README-hostgroup.md)
 * [ipapwpolicy](README-pwpolicy.md)
+* [iparole](README-role.md)
 * [ipaservice](README-service.md)
 * [ipasudocmd](README-sudocmd.md)
 * [ipasudocmdgroup](README-sudocmdgroup.md)
 * [ipasudorule](README-sudorule.md)
 * [ipatopologysegment](README-topology.md)
 * [ipatopologysuffix](README-topology.md)
+* [ipatrust](README-trust.md)
 * [ipauser](README-user.md)
 * [ipavault](README-vault.md)
 

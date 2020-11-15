@@ -37,11 +37,13 @@ __all__ = ["IPAChangeConf", "certmonger", "sysrestore", "root_logger",
            "validate_dm_password", "read_cache", "write_cache",
            "adtrustinstance", "IPAAPI_USER", "sync_time", "PKIIniLoader",
            "default_subject_base", "default_ca_subject_dn",
-           "check_ldap_conf"]
+           "check_ldap_conf", "encode_certificate", "decode_certificate"]
 
 import sys
 import logging
 from contextlib import contextmanager as contextlib_contextmanager
+import six
+import base64
 
 
 from ipapython.version import NUM_VERSION, VERSION
@@ -58,7 +60,11 @@ if NUM_VERSION >= 40500:
     # IPA version >= 4.5
 
     from ipaclient.install.ipachangeconf import IPAChangeConf
-    from ipalib.install import certmonger, sysrestore
+    from ipalib.install import certmonger
+    try:
+        from ipalib import sysrestore
+    except ImportError:
+        from ipalib.install import sysrestore
     from ipapython import ipautil
     from ipapython.ipa_log_manager import standard_logging_setup
     try:
@@ -105,9 +111,13 @@ if NUM_VERSION >= 40500:
     adtrust_imported = True
     kra_imported = True
     from ipaserver.install.installutils import (
-        IPA_MODULES, BadHostError, get_fqdn, get_server_ip_address,
-        is_ipa_configured, load_pkcs12, read_password, verify_fqdn,
+        BadHostError, get_fqdn, get_server_ip_address,
+        load_pkcs12, read_password, verify_fqdn,
         update_hosts_file)
+    try:
+        from ipalib.facts import is_ipa_configured
+    except ImportError:
+        from ipaserver.install.installutils import is_ipa_configured
     from ipaserver.install.server.install import (
         check_dirsrv, validate_admin_password, validate_dm_password,
         read_cache, write_cache)
@@ -120,6 +130,10 @@ if NUM_VERSION >= 40500:
     except ImportError:
         def default_subject_base(realm_name):
             return DN(('O', realm_name))
+    try:
+        from ipalib.facts import IPA_MODULES
+    except ImportError:
+        from ipaserver.install.installutils import IPA_MODULES
     try:
         from ipaserver.install.installutils import default_ca_subject_dn
     except ImportError:
@@ -136,6 +150,17 @@ if NUM_VERSION >= 40500:
         from ipaclient.install.client import check_ldap_conf
     except ImportError:
         check_ldap_conf = None
+
+    try:
+        from ipalib.x509 import Encoding
+    except ImportError:
+        from cryptography.hazmat.primitives.serialization import Encoding
+
+    try:
+        from ipalib.x509 import load_pem_x509_certificate
+    except ImportError:
+        from ipalib.x509 import load_certificate
+        load_pem_x509_certificate = None
 
 else:
     # IPA version < 4.5
@@ -322,3 +347,41 @@ def ansible_module_get_parsed_ip_addresses(ansible_module,
             ansible_module.fail_json(msg="Invalid IP Address %s: %s" % (ip, e))
         ip_addrs.append(ip_parsed)
     return ip_addrs
+
+
+def encode_certificate(cert):
+    """
+    Encode a certificate using base64.
+
+    It also takes FreeIPA and Python versions into account.
+    """
+    if isinstance(cert, (str, bytes)):
+        encoded = base64.b64encode(cert)
+    else:
+        encoded = base64.b64encode(cert.public_bytes(Encoding.DER))
+    if not six.PY2:
+        encoded = encoded.decode('ascii')
+    return encoded
+
+
+def decode_certificate(cert):
+    """
+    Decode a certificate using base64.
+
+    It also takes FreeIPA versions into account and returns a IPACertificate
+    for newer IPA versions.
+    """
+    if hasattr(x509, "IPACertificate"):
+        cert = cert.strip()
+        if not cert.startswith("-----BEGIN CERTIFICATE-----"):
+            cert = "-----BEGIN CERTIFICATE-----\n" + cert
+        if not cert.endswith("-----END CERTIFICATE-----"):
+            cert += "\n-----END CERTIFICATE-----"
+
+        if load_pem_x509_certificate is not None:
+            cert = load_pem_x509_certificate(cert.encode('utf-8'))
+        else:
+            cert = load_certificate(cert.encode('utf-8'))
+    else:
+        cert = base64.b64decode(cert)
+    return cert

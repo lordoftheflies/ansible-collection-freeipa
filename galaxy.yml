@@ -11,9 +11,8 @@ documentation: https://github.com/lordoftheflies/freeipa_collection/blob/master/
 homepage: https://github.com/lordoftheflies/freeipa_collection
 issues: https://github.com/lordoftheflies/freeipa_collection/issues
 
-readme: README.md
-license: GPL-3.0-or-later
-license_file: COPYING
+readme: "README.md"
+license: "GPL-3.0-or-later"
 
 dependencies: {}
 

@@ -227,14 +227,17 @@ SSL certificate Variables
 Variable | Description | Required
 -------- | ----------- | --------
 `ipaserver_dirsrv_cert_files` | Files containing the Directory Server SSL certificate and private keys. (list of strings) | no
-`ipaserver_http_cert_file` | File containing the Apache Server SSL certificate and private key. (string) | no
-`ipaserver_pkinit_cert_file` | File containing the Kerberos KDC SSL certificate and private key. (string) | no
+`ipaserver_http_cert_files` | File containing the Apache Server SSL certificate and private key. (list of string) | no
+`ipaserver_pkinit_cert_files` | File containing the Kerberos KDC SSL certificate and private key. (list of string) | no
 `ipaserver_dirsrv_pin` | The password to unlock the Directory Server private key. (string) | no
 `ipaserver_http_pin` | The password to unlock the Apache Server private key. (string) | no
 `ipaserver_pkinit_pin` | The password to unlock the Kerberos KDC private key. (string) | no
 `ipaserver_dirsrv_cert_name` | Name of the Directory Server SSL certificate to install. (string) | no
 `ipaserver_http_cert_name` | Name of the Apache Server SSL certificate to install. (string) | no
 `ipaserver_pkinit_cert_name` | Name of the Kerberos KDC SSL certificate to install. (string) | no
+`ipaserver_no_pkinit` | Disable pkinit setup steps (boolean) | no
+
+NOTE: If one of the `ipaserver_http_cert_files` or `ipaserver_pkinit_cert_files` is specified, then both are required, so declaring only one of them will raise an error. Additionally, one of `ipaserver_pkinit_cert_files` or `ipaserver_no_pkinit` must be provided as well.
 
 Client Variables
 ----------------
@@ -296,6 +299,7 @@ Variable | Description | Required
 -------- | ----------- | --------
 `ipaserver_install_packages` | The bool value defines if the needed packages are installed on the node. (bool, default: true) | no
 `ipaserver_setup_firewalld` | The value defines if the needed services will automatically be opened in the firewall managed by firewalld. (bool, default: true) | no
+`ipaserver_firewalld_zone` | The value defines the firewall zone that will be used. This needs to be an existing runtime and permanent zone. (string) | no
 `ipaserver_external_cert_files_from_controller` | Files containing the IPA CA certificates and the external CA certificate chains on the controller that will be copied to the ipaserver host to `/root` folder. (list of string) | no
 `ipaserver_copy_csr_to_controller` | Copy the generated CSR from the ipaserver to the controller as `"{{ inventory_hostname }}-ipa.csr"`. (bool) | no
 

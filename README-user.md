@@ -417,10 +417,11 @@ Variable | Description | Required
 `employeetype` | Employee Type | no
 `preferredlanguage` | Preferred Language | no
 `certificate` | List of base-64 encoded user certificates. | no
-`certmapdata` | List of certificate mappings. Either `certificate` or `issuer` together with `subject` need to be specified. <br>Options: | no
-&nbsp; | `certificate` - Base-64 encoded user certificate | no
-&nbsp; | `issuer` - Issuer of the certificate | no
-&nbsp; | `subject` - Subject of the certificate | no
+`certmapdata` | List of certificate mappings. Either `data` or `certificate` or `issuer` together with `subject` need to be specified. Only usable with IPA versions 4.5 and up. <br>Options: | no
+&nbsp; | `certificate` - Base-64 encoded user certificate, not usable with other certmapdata options. | no
+&nbsp; | `issuer` - Issuer of the certificate, only usable together with `usbject` option. | no
+&nbsp; | `subject` - Subject of the certificate, only usable together with `issuer` option. | no
+&nbsp; | `data` - Certmap data, not usable with other certmapdata options. | no
 `noprivate` | Do not create user private group. (bool) | no
 `nomembers` | Suppress processing of membership attributes. (bool) | no
 
@@ -436,7 +437,7 @@ There are only return values if one or more random passwords have been generated
 
 Variable | Description | Returned When
 -------- | ----------- | -------------
-`host` | Host dict with random password. (dict) <br>Options: | If random is yes and user did not exist or update_password is yes
+`user` | User dict with random password. (dict) <br>Options: | If random is yes and user did not exist or update_password is yes
 &nbsp; | `randompassword` - The generated random password | If only one user is handled by the module
 &nbsp; | `name` - The user name of the user that got a new random password. (dict) <br> Options: <br> &nbsp; `randompassword` - The generated random password | If several users are handled by the module
 

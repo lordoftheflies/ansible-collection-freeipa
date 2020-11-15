@@ -19,6 +19,8 @@ Supported FreeIPA Versions
 
 FreeIPA versions 4.4.0 and up are supported by the ipagroup module.
 
+Some variables are only supported on newer versions of FreeIPA. Check `Variables` section for details.
+
 
 Requirements
 ------------
@@ -107,6 +109,24 @@ Example playbook to add group members to a group:
       - appops
 ```
 
+Example playbook to add members from a trusted realm to an external group:
+
+```yaml
+--
+- name: Playbook to handle groups.
+  hosts: ipaserver
+  became: true
+
+  - name: Create an external group and add members from a trust to it.
+    ipagroup:
+      ipaadmin_password: SomeADMINpassword
+      name: extgroup
+      external: yes
+      externalmember:
+      - WINIPA\\Web Users
+      - WINIPA\\Developers
+```
+
 Example playbook to remove groups:
 
 ```yaml
@@ -137,12 +157,16 @@ Variable | Description | Required
 `name` \| `cn` | The list of group name strings. | no
 `description` | The group description string. | no
 `gid` \| `gidnumber` | The GID integer. | no
+`posix` | Create a non-POSIX group or change a non-POSIX to a posix group. (bool) | no
 `nonposix` | Create as a non-POSIX group. (bool) | no
 `external` | Allow adding external non-IPA members from trusted domains. (bool) | no
 `nomembers` | Suppress processing of membership attributes. (bool) | no
 `user` | List of user name strings assigned to this group. | no
 `group` | List of group name strings assigned to this group. | no
 `service` | List of service name strings assigned to this group. Only usable with IPA versions 4.7 and up. | no
+`membermanager_user` | List of member manager users assigned to this group. Only usable with IPA versions 4.8.4 and up. | no
+`membermanager_group` | List of member manager groups assigned to this group. Only usable with IPA versions 4.8.4 and up. | no
+`externalmember` \| `ipaexternalmember`  \| `external_member`| List of members of a trusted domain in DOM\\name or name@domain form. | no
 `action` | Work on group or member level. It can be on of `member` or `group` and defaults to `group`. | no
 `state` | The state to ensure. It can be one of `present` or `absent`, default: `present`. | yes
 

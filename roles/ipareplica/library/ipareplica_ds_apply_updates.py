@@ -123,8 +123,8 @@ def main():
             ccache=dict(required=True),
             _ca_enabled=dict(required=False, type='bool'),
             _ca_file=dict(required=False),
-            _dirsrv_pkcs12_info=dict(required=False),
-            _pkinit_pkcs12_info=dict(required=False),
+            _dirsrv_pkcs12_info=dict(required=False, type='list'),
+            _pkinit_pkcs12_info=dict(required=False, type='list'),
             _top_dir=dict(required=True),
             dirman_password=dict(required=True, no_log=True),
             ds_ca_subject=dict(required=True),
@@ -177,6 +177,7 @@ def main():
     config = gen_ReplicaConfig()
     config.dirman_password = dirman_password
     config.subject_base = options.subject_base
+    config.master_host_name = master_host_name
 
     remote_api = gen_remote_api(master_host_name, paths.ETC_IPA)
 

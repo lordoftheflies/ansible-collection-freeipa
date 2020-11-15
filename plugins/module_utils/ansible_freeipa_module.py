@@ -39,6 +39,7 @@ try:
 except ImportError:
     from ipapython.ipautil import kinit_password, kinit_keytab
 from ipapython.ipautil import run
+from ipapython.dn import DN
 from ipaplatform.paths import paths
 from ipalib.krb_utils import get_credentials_if_valid
 from ansible.module_utils.basic import AnsibleModule
@@ -48,6 +49,13 @@ try:
     from ipalib.x509 import Encoding
 except ImportError:
     from cryptography.hazmat.primitives.serialization import Encoding
+
+try:
+    from ipalib.x509 import load_pem_x509_certificate
+except ImportError:
+    from ipalib.x509 import load_certificate
+    load_pem_x509_certificate = None
+
 import socket
 import base64
 import six
@@ -165,6 +173,11 @@ def api_command(module, command, name, args):
 def api_command_no_name(module, command, args):
     """Call ipa.Command without a name."""
     return api.Command[command](**args)
+
+
+def api_check_command(command):
+    """Return if command exists in command list."""
+    return command in api.Command
 
 
 def api_check_param(command, name):
@@ -298,6 +311,10 @@ def api_get_realm():
 
 def gen_add_del_lists(user_list, res_list):
     """Generate the lists for the addition and removal of members."""
+    # The user list is None, therefore the parameter should not be touched
+    if user_list is None:
+        return [], []
+
     add_list = list(set(user_list or []) - set(res_list or []))
     del_list = list(set(res_list or []) - set(user_list or []))
 
@@ -317,6 +334,30 @@ def encode_certificate(cert):
     if not six.PY2:
         encoded = encoded.decode('ascii')
     return encoded
+
+
+def load_cert_from_str(cert):
+    cert = cert.strip()
+    if not cert.startswith("-----BEGIN CERTIFICATE-----"):
+        cert = "-----BEGIN CERTIFICATE-----\n" + cert
+    if not cert.endswith("-----END CERTIFICATE-----"):
+        cert += "\n-----END CERTIFICATE-----"
+
+    if load_pem_x509_certificate is not None:
+        cert = load_pem_x509_certificate(cert.encode('utf-8'))
+    else:
+        cert = load_certificate(cert.encode('utf-8'))
+    return cert
+
+
+def DN_x500_text(text):
+    if hasattr(DN, "x500_text"):
+        return DN(text).x500_text()
+    else:
+        # Emulate x500_text
+        dn = DN(text)
+        dn.rdns = reversed(dn.rdns)
+        return str(dn)
 
 
 def is_valid_port(port):
@@ -465,7 +506,7 @@ class FreeIPABaseModule(AnsibleModule):
         #   when needed.
         self.ipa_params = AnsibleFreeIPAParams(self)
 
-    def get_ipa_command_args(self):
+    def get_ipa_command_args(self, **kwargs):
         """
         Return a dict to be passed to an IPA command.
 
@@ -497,7 +538,7 @@ class FreeIPABaseModule(AnsibleModule):
             elif hasattr(self, param_name):
                 method = getattr(self, param_name)
                 if callable(method):
-                    value = method()
+                    value = method(**kwargs)
 
             # We don't have a way to guess the value so fail.
             else:
@@ -569,13 +610,16 @@ class FreeIPABaseModule(AnsibleModule):
         exit the module with proper arguments.
 
         """
-        if exc_val:
-            self.fail_json(msg=str(exc_val))
-
         # TODO: shouldn't we also disconnect from api backend?
         temp_kdestroy(self.ccache_dir, self.ccache_name)
 
-        self.exit_json(changed=self.changed, user=self.exit_args)
+        if exc_type == SystemExit:
+            raise
+
+        if exc_val:
+            self.fail_json(msg=str(exc_val))
+
+        self.exit_json(changed=self.changed, **self.exit_args)
 
     def get_command_errors(self, command, result):
         """Look for erros into command results."""
@@ -614,13 +658,21 @@ class FreeIPABaseModule(AnsibleModule):
             except Exception as excpt:
                 self.fail_json(msg="%s: %s: %s" % (command, name, str(excpt)))
             else:
-                if "completed" in result:
-                    if result["completed"] > 0:
-                        self.changed = True
-                else:
-                    self.changed = True
-
+                self.process_command_result(name, command, args, result)
             self.get_command_errors(command, result)
+
+    def process_command_result(self, name, command, args, result):
+        """
+        Process an API command result.
+
+        This method can be overriden in subclasses, and change self.exit_values
+        to return data in the result for the controller.
+        """
+        if "completed" in result:
+            if result["completed"] > 0:
+                self.changed = True
+        else:
+            self.changed = True
 
     def require_ipa_attrs_change(self, command_args, ipa_attrs):
         """

@@ -57,6 +57,11 @@ options:
     description: Allow adding external non-IPA members from trusted domains
     required: false
     type: bool
+  posix:
+    description:
+      Create a non-POSIX group or change a non-POSIX to a posix group.
+    required: false
+    type: bool
   nomembers:
     description: Suppress processing of membership attributes
     required: false
@@ -75,6 +80,24 @@ options:
     - Only usable with IPA versions 4.7 and up.
     required: false
     type: list
+  membermanager_user:
+    description:
+    - List of member manager users assigned to this group.
+    - Only usable with IPA versions 4.8.4 and up.
+    required: false
+    type: list
+  membermanager_group:
+    description:
+    - List of member manager groups assigned to this group.
+    - Only usable with IPA versions 4.8.4 and up.
+    required: false
+    type: list
+  externalmember:
+    description:
+    - List of members of a trusted domain in DOM\\name or name@domain form.
+    required: false
+    type: list
+    ailases: ["ipaexternalmember", "external_member"]
   action:
     description: Work on group or member level
     default: group
@@ -128,10 +151,31 @@ EXAMPLES = """
     - sysops
     - appops
 
-# Remove goups sysops, appops and ops
+# Create a non-POSIX group
 - ipagroup:
     ipaadmin_password: SomeADMINpassword
-    name: sysops,appops,ops
+    name: nongroup
+    nonposix: yes
+
+# Turn a non-POSIX group into a POSIX group.
+- ipagroup:
+    ipaadmin_password: SomeADMINpassword
+    name: nonposix
+    posix: yes
+
+# Create an external group and add members from a trust to it.
+- ipagroup:
+    ipaadmin_password: SomeADMINpassword
+    name: extgroup
+    external: yes
+    externalmember:
+    - WINIPA\\Web Users
+    - WINIPA\\Developers
+
+# Remove goups sysops, appops, ops and nongroup
+- ipagroup:
+    ipaadmin_password: SomeADMINpassword
+    name: sysops,appops,ops, nongroup
     state: absent
 """
 
@@ -141,7 +185,7 @@ RETURN = """
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.ansible_freeipa_module import temp_kinit, \
     temp_kdestroy, valid_creds, api_connect, api_command, compare_args_ipa, \
-    api_check_param, module_params_get
+    api_check_param, module_params_get, gen_add_del_lists, api_check_command
 
 
 def find_group(module, name):
@@ -161,23 +205,19 @@ def find_group(module, name):
         return None
 
 
-def gen_args(description, gid, nonposix, external, nomembers):
+def gen_args(description, gid, nomembers):
     _args = {}
     if description is not None:
         _args["description"] = description
     if gid is not None:
         _args["gidnumber"] = gid
-    if nonposix is not None:
-        _args["nonposix"] = nonposix
-    if external is not None:
-        _args["external"] = external
     if nomembers is not None:
         _args["nomembers"] = nomembers
 
     return _args
 
 
-def gen_member_args(user, group, service):
+def gen_member_args(user, group, service, externalmember):
     _args = {}
     if user is not None:
         _args["member_user"] = user
@@ -185,8 +225,55 @@ def gen_member_args(user, group, service):
         _args["member_group"] = group
     if service is not None:
         _args["member_service"] = service
+    if externalmember is not None:
+        _args["member_external"] = externalmember
 
     return _args
+
+
+def is_external_group(res_find):
+    """Verify if the result group is an external group."""
+    return res_find and 'ipaexternalgroup' in res_find['objectclass']
+
+
+def is_posix_group(res_find):
+    """Verify if the result group is an external group."""
+    return res_find and 'posixgroup' in res_find['objectclass']
+
+
+def check_objectclass_args(module, res_find, nonposix, posix, external):
+    if is_posix_group(res_find):
+        if (
+            (posix is not None and posix is False)
+            or nonposix
+            or external
+        ):
+            module.fail_json(
+                msg="Cannot change `POSIX` status of a group "
+                    "to `non-POSIX` or `external`.")
+    # Can't change an existing external group
+    if is_external_group(res_find):
+        if (
+            posix
+            or (nonposix is not None and nonposix is False)
+            or (external is not None and external is False)
+        ):
+            module.fail_json(
+                msg="Cannot change `external` status of group "
+                    "to `POSIX` or `non-external`.")
+
+
+def should_modify_group(module, res_find, args, nonposix, posix, external):
+    if not compare_args_ipa(module, args, res_find):
+        return True
+    if any([posix, nonposix]):
+        set_posix = posix or (nonposix is not None and not nonposix)
+        if set_posix and not is_posix_group(res_find):
+            return True
+    if not is_external_group(res_find) and external:
+        if not is_posix_group(res_find):
+            return True
+    return False
 
 
 def main():
@@ -203,16 +290,26 @@ def main():
             gid=dict(type="int", aliases=["gidnumber"], default=None),
             nonposix=dict(required=False, type='bool', default=None),
             external=dict(required=False, type='bool', default=None),
+            posix=dict(required=False, type='bool', default=None),
             nomembers=dict(required=False, type='bool', default=None),
             user=dict(required=False, type='list', default=None),
             group=dict(required=False, type='list', default=None),
             service=dict(required=False, type='list', default=None),
+            membermanager_user=dict(required=False, type='list', default=None),
+            membermanager_group=dict(required=False, type='list',
+                                     default=None),
+            externalmember=dict(required=False, type='list', default=None,
+                                aliases=[
+                                    "ipaexternalmember",
+                                    "external_member"
+                                ]),
             action=dict(type="str", default="group",
                         choices=["member", "group"]),
             # state
             state=dict(type="str", default="present",
                        choices=["present", "absent"]),
         ),
+        mutually_exclusive=[['posix', 'nonposix']],
         supports_check_mode=True,
     )
 
@@ -233,10 +330,16 @@ def main():
     gid = module_params_get(ansible_module, "gid")
     nonposix = module_params_get(ansible_module, "nonposix")
     external = module_params_get(ansible_module, "external")
+    posix = module_params_get(ansible_module, "posix")
     nomembers = module_params_get(ansible_module, "nomembers")
     user = module_params_get(ansible_module, "user")
     group = module_params_get(ansible_module, "group")
     service = module_params_get(ansible_module, "service")
+    membermanager_user = module_params_get(ansible_module,
+                                           "membermanager_user")
+    membermanager_group = module_params_get(ansible_module,
+                                            "membermanager_group")
+    externalmember = module_params_get(ansible_module, "externalmember")
     action = module_params_get(ansible_module, "action")
     # state
     state = module_params_get(ansible_module, "state")
@@ -248,7 +351,7 @@ def main():
             ansible_module.fail_json(
                 msg="Only one group can be added at a time.")
         if action == "member":
-            invalid = ["description", "gid", "nonposix", "external",
+            invalid = ["description", "gid", "posix", "nonposix", "external",
                        "nomembers"]
             for x in invalid:
                 if vars()[x] is not None:
@@ -260,9 +363,10 @@ def main():
         if len(names) < 1:
             ansible_module.fail_json(
                 msg="No name given.")
-        invalid = ["description", "gid", "nonposix", "external", "nomembers"]
+        invalid = ["description", "gid", "posix", "nonposix", "external",
+                   "nomembers"]
         if action == "group":
-            invalid.extend(["user", "group", "service"])
+            invalid.extend(["user", "group", "service", "externalmember"])
         for x in invalid:
             if vars()[x] is not None:
                 ansible_module.fail_json(
@@ -287,6 +391,14 @@ def main():
                 msg="Managing a service as part of a group is not supported "
                 "by your IPA version")
 
+        has_add_membermanager = api_check_command("group_add_member_manager")
+        if ((membermanager_user is not None or
+             membermanager_group is not None) and not has_add_membermanager):
+            ansible_module.fail_json(
+                msg="Managing a membermanager user or group is not supported "
+                "by your IPA version"
+            )
+
         commands = []
 
         for name in names:
@@ -295,9 +407,12 @@ def main():
 
             # Create command
             if state == "present":
+                # Can't change an existing posix group
+                check_objectclass_args(ansible_module, res_find, nonposix,
+                                       posix, external)
+
                 # Generate args
-                args = gen_args(description, gid, nonposix, external,
-                                nomembers)
+                args = gen_args(description, gid, nomembers)
 
                 if action == "group":
                     # Found the group
@@ -305,87 +420,158 @@ def main():
                         # For all settings is args, check if there are
                         # different settings in the find result.
                         # If yes: modify
-                        if not compare_args_ipa(ansible_module, args,
-                                                res_find):
+                        if should_modify_group(ansible_module, res_find, args,
+                                               nonposix, posix, external):
+                            if (
+                                posix
+                                or (nonposix is not None and not nonposix)
+                            ):
+                                args['posix'] = True
+                            if external:
+                                args['external'] = True
                             commands.append([name, "group_mod", args])
                     else:
+                        if nonposix or (posix is not None and not posix):
+                            args['nonposix'] = True
+                        if external:
+                            args['external'] = True
                         commands.append([name, "group_add", args])
-                        # Set res_find to empty dict for next step
+                        # Set res_find dict for next step
                         res_find = {}
 
-                    member_args = gen_member_args(user, group, service)
+                    # if we just created/modified the group, update res_find
+                    res_find.setdefault("objectclass", [])
+                    if external and not is_external_group(res_find):
+                        res_find["objectclass"].append("ipaexternalgroup")
+                    if posix and not is_posix_group(res_find):
+                        res_find["objectclass"].append("posixgroup")
+
+                    member_args = gen_member_args(
+                        user, group, service, externalmember
+                    )
                     if not compare_args_ipa(ansible_module, member_args,
                                             res_find):
                         # Generate addition and removal lists
-                        user_add = list(
-                            set(user or []) -
-                            set(res_find.get("member_user", [])))
-                        user_del = list(
-                            set(res_find.get("member_user", [])) -
-                            set(user or []))
-                        group_add = list(
-                            set(group or []) -
-                            set(res_find.get("member_group", [])))
-                        group_del = list(
-                            set(res_find.get("member_group", [])) -
-                            set(group or []))
-                        service_add = list(
-                            set(service or []) -
-                            set(res_find.get("member_service", [])))
-                        service_del = list(
-                            set(res_find.get("member_service", [])) -
-                            set(service or []))
+                        user_add, user_del = gen_add_del_lists(
+                            user, res_find.get("member_user"))
 
+                        group_add, group_del = gen_add_del_lists(
+                            group, res_find.get("member_group"))
+
+                        service_add, service_del = gen_add_del_lists(
+                            service, res_find.get("member_service"))
+
+                        (externalmember_add,
+                         externalmember_del) = gen_add_del_lists(
+                            externalmember, res_find.get("member_external"))
+
+                        # setup member args for add/remove members.
+                        add_member_args = {
+                            "user": user_add,
+                            "group": group_add,
+                        }
+                        del_member_args = {
+                            "user": user_del,
+                            "group": group_del,
+                        }
                         if has_add_member_service:
-                            # Add members
-                            if len(user_add) > 0 or len(group_add) > 0 or \
-                               len(service_add) > 0:
-                                commands.append([name, "group_add_member",
-                                                 {
-                                                     "user": user_add,
-                                                     "group": group_add,
-                                                     "service": service_add,
-                                                 }])
-                            # Remove members
-                            if len(user_del) > 0 or len(group_del) > 0 or \
-                               len(service_del) > 0:
-                                commands.append([name, "group_remove_member",
-                                                 {
-                                                     "user": user_del,
-                                                     "group": group_del,
-                                                     "service": service_del,
-                                                 }])
-                        else:
-                            # Add members
-                            if len(user_add) > 0 or len(group_add) > 0:
-                                commands.append([name, "group_add_member",
-                                                 {
-                                                     "user": user_add,
-                                                     "group": group_add,
-                                                 }])
-                            # Remove members
-                            if len(user_del) > 0 or len(group_del) > 0:
-                                commands.append([name, "group_remove_member",
-                                                 {
-                                                     "user": user_del,
-                                                     "group": group_del,
-                                                 }])
+                            add_member_args["service"] = service_add
+                            del_member_args["service"] = service_del
+
+                        if is_external_group(res_find):
+                            add_member_args["ipaexternalmember"] = \
+                                externalmember_add
+                            del_member_args["ipaexternalmember"] = \
+                                externalmember_del
+                        elif externalmember or external:
+                            ansible_module.fail_json(
+                                msg="Cannot add external members to a "
+                                    "non-external group."
+                            )
+
+                        # Add members
+                        add_members = any([user_add, group_add,
+                                           service_add, externalmember_add])
+                        if add_members:
+                            commands.append(
+                                [name, "group_add_member", add_member_args]
+                            )
+                        # Remove members
+                        remove_members = any([user_del, group_del,
+                                              service_del, externalmember_del])
+                        if remove_members:
+                            commands.append(
+                                [name, "group_remove_member", del_member_args]
+                            )
+
+                    membermanager_user_add, membermanager_user_del = \
+                        gen_add_del_lists(
+                            membermanager_user,
+                            res_find.get("membermanager_user")
+                        )
+
+                    membermanager_group_add, membermanager_group_del = \
+                        gen_add_del_lists(
+                            membermanager_group,
+                            res_find.get("membermanager_group")
+                        )
+
+                    if has_add_membermanager:
+                        # Add membermanager users and groups
+                        if len(membermanager_user_add) > 0 or \
+                           len(membermanager_group_add) > 0:
+                            commands.append(
+                                [name, "group_add_member_manager",
+                                 {
+                                     "user": membermanager_user_add,
+                                     "group": membermanager_group_add,
+                                 }]
+                            )
+                        # Remove member manager
+                        if len(membermanager_user_del) > 0 or \
+                           len(membermanager_group_del) > 0:
+                            commands.append(
+                                [name, "group_remove_member_manager",
+                                 {
+                                     "user": membermanager_user_del,
+                                     "group": membermanager_group_del,
+                                 }]
+                            )
+
                 elif action == "member":
                     if res_find is None:
                         ansible_module.fail_json(msg="No group '%s'" % name)
+
+                    add_member_args = {
+                        "user": user,
+                        "group": group,
+                    }
                     if has_add_member_service:
-                        commands.append([name, "group_add_member",
-                                         {
-                                             "user": user,
-                                             "group": group,
-                                             "service": service,
-                                         }])
-                    else:
-                        commands.append([name, "group_add_member",
-                                         {
-                                             "user": user,
-                                             "group": group,
-                                         }])
+                        add_member_args["service"] = service
+                    if is_external_group(res_find):
+                        add_member_args["ipaexternalmember"] = externalmember
+                    elif externalmember:
+                        ansible_module.fail_json(
+                            msg="Cannot add external members to a "
+                                "non-external group."
+                        )
+
+                    if any([user, group, service, externalmember]):
+                        commands.append(
+                            [name, "group_add_member", add_member_args]
+                        )
+
+                    if has_add_membermanager:
+                        # Add membermanager users and groups
+                        if membermanager_user is not None or \
+                           membermanager_group is not None:
+                            commands.append(
+                                [name, "group_add_member_manager",
+                                 {
+                                     "user": membermanager_user,
+                                     "group": membermanager_group,
+                                 }]
+                            )
 
             elif state == "absent":
                 if action == "group":
@@ -396,12 +582,37 @@ def main():
                     if res_find is None:
                         ansible_module.fail_json(msg="No group '%s'" % name)
 
-                    commands.append([name, "group_remove_member",
-                                     {
-                                         "user": user,
-                                         "group": group,
-                                         "service": service,
-                                     }])
+                    del_member_args = {
+                        "user": user,
+                        "group": group,
+                    }
+                    if has_add_member_service:
+                        del_member_args["service"] = service
+                    if is_external_group(res_find):
+                        del_member_args["ipaexternalmember"] = externalmember
+                    elif externalmember:
+                        ansible_module.fail_json(
+                            msg="Cannot add external members to a "
+                                "non-external group."
+                        )
+
+                    if any([user, group, service, externalmember]):
+                        commands.append(
+                            [name, "group_remove_member", del_member_args]
+                        )
+
+                    if has_add_membermanager:
+                        # Remove membermanager users and groups
+                        if membermanager_user is not None or \
+                           membermanager_group is not None:
+                            commands.append(
+                                [name, "group_remove_member_manager",
+                                 {
+                                     "user": membermanager_user,
+                                     "group": membermanager_group,
+                                 }]
+                            )
+
             else:
                 ansible_module.fail_json(msg="Unkown state '%s'" % state)
 
@@ -423,16 +634,15 @@ def main():
             # All "already a member" and "not a member" failures in the
             # result are ignored. All others are reported.
             errors = []
-            if "failed" in result and len(result["failed"]) > 0:
-                for item in result["failed"]:
-                    failed_item = result["failed"][item]
-                    for member_type in failed_item:
-                        for member, failure in failed_item[member_type]:
-                            if "already a member" in failure \
-                               or "not a member" in failure:
-                                continue
-                            errors.append("%s: %s %s: %s" % (
-                                command, member_type, member, failure))
+            for failed_item in result.get("failed", []):
+                failed = result["failed"][failed_item]
+                for member_type in failed:
+                    for member, failure in failed[member_type]:
+                        if "already a member" in failure \
+                           or "not a member" in failure:
+                            continue
+                        errors.append("%s: %s %s: %s" % (
+                            command, member_type, member, failure))
             if len(errors) > 0:
                 ansible_module.fail_json(msg=", ".join(errors))
 

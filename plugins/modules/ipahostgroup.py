@@ -58,6 +58,24 @@ options:
     description: List of hostgroup names assigned to this hostgroup.
     required: false
     type: list
+  membermanager_user:
+    description:
+    - List of member manager users assigned to this hostgroup.
+    - Only usable with IPA versions 4.8.4 and up.
+    required: false
+    type: list
+  membermanager_group:
+    description:
+    - List of member manager groups assigned to this hostgroup.
+    - Only usable with IPA versions 4.8.4 and up.
+    required: false
+    type: list
+  rename:
+    description:
+    - Rename hostgroup to the given name.
+    - Only usable with IPA versions 4.8.7 and up.
+    required: false
+    aliases: ["new_name"]
   action:
     description: Work on hostgroup or member level
     default: hostgroup
@@ -65,7 +83,7 @@ options:
   state:
     description: State to ensure
     default: present
-    choices: ["present", "absent"]
+    choices: ["present", "absent", "renamed"]
 author:
     - Thomas Woerner
 """
@@ -104,6 +122,12 @@ EXAMPLES = """
     action: member
     state: absent
 
+# Rename hostgroup
+- ipahostgroup:
+    ipaadmin_password: SomeADMINpassword
+    name: databases
+    rename: datalake
+
 # Ensure host-group databases is absent
 - ipahostgroup:
     ipaadmin_password: SomeADMINpassword
@@ -117,7 +141,7 @@ RETURN = """
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.ansible_freeipa_module import temp_kinit, \
     temp_kdestroy, valid_creds, api_connect, api_command, compare_args_ipa, \
-    module_params_get
+    module_params_get, gen_add_del_lists, api_check_command, api_check_param
 
 
 def find_hostgroup(module, name):
@@ -137,12 +161,14 @@ def find_hostgroup(module, name):
         return None
 
 
-def gen_args(description, nomembers):
+def gen_args(description, nomembers, rename):
     _args = {}
     if description is not None:
         _args["description"] = description
     if nomembers is not None:
         _args["nomembers"] = nomembers
+    if rename is not None:
+        _args["rename"] = rename
 
     return _args
 
@@ -171,11 +197,16 @@ def main():
             nomembers=dict(required=False, type='bool', default=None),
             host=dict(required=False, type='list', default=None),
             hostgroup=dict(required=False, type='list', default=None),
+            membermanager_user=dict(required=False, type='list', default=None),
+            membermanager_group=dict(required=False, type='list',
+                                     default=None),
+            rename=dict(required=False, type='str', default=None,
+                        aliases=["new_name"]),
             action=dict(type="str", default="hostgroup",
                         choices=["member", "hostgroup"]),
             # state
             state=dict(type="str", default="present",
-                       choices=["present", "absent"]),
+                       choices=["present", "absent", "renamed"]),
         ),
         supports_check_mode=True,
     )
@@ -196,6 +227,11 @@ def main():
     nomembers = module_params_get(ansible_module, "nomembers")
     host = module_params_get(ansible_module, "host")
     hostgroup = module_params_get(ansible_module, "hostgroup")
+    membermanager_user = module_params_get(ansible_module,
+                                           "membermanager_user")
+    membermanager_group = module_params_get(ansible_module,
+                                            "membermanager_group")
+    rename = module_params_get(ansible_module, "rename")
     action = module_params_get(ansible_module, "action")
     # state
     state = module_params_get(ansible_module, "state")
@@ -206,19 +242,38 @@ def main():
         if len(names) != 1:
             ansible_module.fail_json(
                 msg="Only one hostgroup can be added at a time.")
+        invalid = ["rename"]
         if action == "member":
-            invalid = ["description", "nomembers"]
-            for x in invalid:
-                if vars()[x] is not None:
-                    ansible_module.fail_json(
-                        msg="Argument '%s' can not be used with action "
-                        "'%s'" % (x, action))
+            invalid.extend(["description", "nomembers"])
+        for x in invalid:
+            if vars()[x] is not None:
+                ansible_module.fail_json(
+                    msg="Argument '%s' can not be used with action "
+                    "'%s'" % (x, action))
+
+    if state == "renamed":
+        if len(names) != 1:
+            ansible_module.fail_json(
+                msg="Only one hostgroup can be added at a time.")
+        if action == "member":
+            ansible_module.fail_json(
+                msg="Action '%s' can not be used with state '%s'" %
+                (action, state))
+        invalid = [
+            "description", "nomembers", "host", "hostgroup",
+            "membermanager_user", "membermanager_group"
+        ]
+        for x in invalid:
+            if vars()[x] is not None:
+                ansible_module.fail_json(
+                    msg="Argument '%s' can not be used with state '%s'" %
+                    (x, state))
 
     if state == "absent":
         if len(names) < 1:
             ansible_module.fail_json(
                 msg="No name given.")
-        invalid = ["description", "nomembers"]
+        invalid = ["description", "nomembers", "rename"]
         if action == "hostgroup":
             invalid.extend(["host", "hostgroup"])
         for x in invalid:
@@ -239,6 +294,19 @@ def main():
                                                  ipaadmin_password)
         api_connect()
 
+        has_add_membermanager = api_check_command(
+            "hostgroup_add_member_manager")
+        if ((membermanager_user is not None or
+             membermanager_group is not None) and not has_add_membermanager):
+            ansible_module.fail_json(
+                msg="Managing a membermanager user or group is not supported "
+                "by your IPA version"
+            )
+        has_mod_rename = api_check_param("hostgroup_mod", "rename")
+        if not has_mod_rename and rename is not None:
+            ansible_module.fail_json(
+                msg="Renaming hostgroups is not supported by your IPA version")
+
         commands = []
 
         for name in names:
@@ -248,7 +316,7 @@ def main():
             # Create command
             if state == "present":
                 # Generate args
-                args = gen_args(description, nomembers)
+                args = gen_args(description, nomembers, rename)
 
                 if action == "hostgroup":
                     # Found the hostgroup
@@ -268,18 +336,11 @@ def main():
                     if not compare_args_ipa(ansible_module, member_args,
                                             res_find):
                         # Generate addition and removal lists
-                        host_add = list(
-                            set(host or []) -
-                            set(res_find.get("member_host", [])))
-                        host_del = list(
-                            set(res_find.get("member_host", [])) -
-                            set(host or []))
-                        hostgroup_add = list(
-                            set(hostgroup or []) -
-                            set(res_find.get("member_hostgroup", [])))
-                        hostgroup_del = list(
-                            set(res_find.get("member_hostgroup", [])) -
-                            set(hostgroup or []))
+                        host_add, host_del = gen_add_del_lists(
+                            host, res_find.get("member_host"))
+
+                        hostgroup_add, hostgroup_del = gen_add_del_lists(
+                            hostgroup, res_find.get("member_hostgroup"))
 
                         # Add members
                         if len(host_add) > 0 or len(hostgroup_add) > 0:
@@ -295,6 +356,41 @@ def main():
                                                  "host": host_del,
                                                  "hostgroup": hostgroup_del,
                                              }])
+
+                    membermanager_user_add, membermanager_user_del = \
+                        gen_add_del_lists(
+                            membermanager_user,
+                            res_find.get("membermanager_user")
+                        )
+
+                    membermanager_group_add, membermanager_group_del = \
+                        gen_add_del_lists(
+                            membermanager_group,
+                            res_find.get("membermanager_group")
+                        )
+
+                    if has_add_membermanager:
+                        # Add membermanager users and groups
+                        if len(membermanager_user_add) > 0 or \
+                           len(membermanager_group_add) > 0:
+                            commands.append(
+                                [name, "hostgroup_add_member_manager",
+                                 {
+                                     "user": membermanager_user_add,
+                                     "group": membermanager_group_add,
+                                 }]
+                            )
+                        # Remove member manager
+                        if len(membermanager_user_del) > 0 or \
+                           len(membermanager_group_del) > 0:
+                            commands.append(
+                                [name, "hostgroup_remove_member_manager",
+                                 {
+                                     "user": membermanager_user_del,
+                                     "group": membermanager_group_del,
+                                 }]
+                            )
+
                 elif action == "member":
                     if res_find is None:
                         ansible_module.fail_json(
@@ -306,6 +402,35 @@ def main():
                                          "host": host,
                                          "hostgroup": hostgroup,
                                      }])
+
+                    if has_add_membermanager:
+                        # Add membermanager users and groups
+                        if membermanager_user is not None or \
+                           membermanager_group is not None:
+                            commands.append(
+                                [name, "hostgroup_add_member_manager",
+                                 {
+                                     "user": membermanager_user,
+                                     "group": membermanager_group,
+                                 }]
+                            )
+
+            elif state == "renamed":
+                if res_find is not None:
+                    if rename != name:
+                        commands.append(
+                            [name, "hostgroup_mod", {"rename": rename}]
+                        )
+                else:
+                    # If a hostgroup with the desired name exists, do nothing.
+                    new_find = find_hostgroup(ansible_module, rename)
+                    if new_find is None:
+                        # Fail only if the either hostsgroups do not exist.
+                        ansible_module.fail_json(
+                            msg="Attribute `rename` can not be used, unless "
+                                "hostgroup exists."
+                        )
+
             elif state == "absent":
                 if action == "hostgroup":
                     if res_find is not None:
@@ -322,6 +447,19 @@ def main():
                                          "host": host,
                                          "hostgroup": hostgroup,
                                      }])
+
+                    if has_add_membermanager:
+                        # Remove membermanager users and groups
+                        if membermanager_user is not None or \
+                           membermanager_group is not None:
+                            commands.append(
+                                [name, "hostgroup_remove_member_manager",
+                                 {
+                                     "user": membermanager_user,
+                                     "group": membermanager_group,
+                                 }]
+                            )
+
             else:
                 ansible_module.fail_json(msg="Unkown state '%s'" % state)
 
@@ -341,14 +479,15 @@ def main():
             # All "already a member" and "not a member" failures in the
             # result are ignored. All others are reported.
             errors = []
-            if "failed" in result and "member" in result["failed"]:
-                failed = result["failed"]["member"]
+            for failed_item in result.get("failed", []):
+                failed = result["failed"][failed_item]
                 for member_type in failed:
                     for member, failure in failed[member_type]:
-                        if "already a member" not in failure \
-                           and "not a member" not in failure:
-                            errors.append("%s: %s %s: %s" % (
-                                command, member_type, member, failure))
+                        if "already a member" in failure \
+                           or "not a member" in failure:
+                            continue
+                        errors.append("%s: %s %s: %s" % (
+                            command, member_type, member, failure))
             if len(errors) > 0:
                 ansible_module.fail_json(msg=", ".join(errors))
 
